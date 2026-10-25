@@ -9,6 +9,53 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
+      - name: Add prayer widget
+        run: |
+          python3 - <<'PY'
+          p = 'launcher/app/src/main/java/com/gathin/tvhome/MainActivity.java'
+          s = open(p, encoding='utf-8').read()
+
+          def put(anchor, new, after=False):
+              global s
+              assert s.count(anchor) == 1, 'anchor not found once: ' + anchor
+              s = s.replace(anchor, anchor + new if after else new + anchor)
+
+          put('private boolean shamsi;', '''
+              private TextView prayerView;
+              private PrayerTimes prayer;
+              private final int[] prayerAt = new int[2], prayerCol = new int[2], prayerRoot = new int[2];''', after=True)
+
+          put('vpnApp = cfg.vpnApp;', '''prayerView = new TextView(this);
+                  prayerView.setTextColor(0xCCFFFFFF);
+                  prayerView.setTextSize(17f);
+                  prayerView.setSingleLine(true);
+                  prayerView.setShadowLayer(4 * density, 0, density, 0x99000000);
+                  root.addView(prayerView, new FrameLayout.LayoutParams(
+                          ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+                          Gravity.TOP | Gravity.START));
+                  final View clockColumn = (View) dateBlock.getParent();
+                  clockColumn.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> placePrayer(clock, clockColumn));
+                  prayer = new PrayerTimes(this, prayerView);
+                  ''')
+
+          put('private void updateShamsiDate() {', '''private void placePrayer(View clock, View column) {
+                  clock.getLocationInWindow(prayerAt);
+                  column.getLocationInWindow(prayerCol);
+                  root.getLocationInWindow(prayerRoot);
+                  prayerView.setTranslationX(prayerAt[0] - prayerRoot[0]);
+                  prayerView.setTranslationY(prayerCol[1] - prayerRoot[1] + column.getHeight() + 6 * density);
+              }
+
+              ''')
+
+          put('handler.postDelayed(minuteTick, MINUTE_MS);', '''if (prayer != null) prayer.start();
+                  ''')
+
+          put('handler.removeCallbacks(minuteTick);', '''
+                  if (prayer != null) prayer.stop();''', after=True)
+
+          open(p, 'w', encoding='utf-8').write(s)
+          PY
       - name: Accept licenses
         run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null || true
       - name: Install SDK parts
